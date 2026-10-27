@@ -1,0 +1,139 @@
+{
+  "name": "jsonl-gazelle-app",
+  "version": "1.0.0",
+  "description": "Standalone fast JSONL / NDJSON / JSON viewer and editor with BBEdit-style sidebar",
+  "author": "Lex",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "copy:assets": "mkdir -p dist/renderer && cp src/renderer/index.html dist/renderer/ && cp gazelle.svg dist/ && cp gazelle-animation.gif dist/",
+    "build:main": "esbuild src/main/main.ts src/preload/preload.ts --bundle --platform=node --target=node20 --outdir=dist --external:electron",
+    "build:renderer": "esbuild src/renderer/index.ts --bundle --platform=browser --target=chrome120 --outfile=dist/renderer/bundle.js --sourcemap",
+    "build": "npm run build:main && npm run build:renderer && npm run copy:assets",
+    "start": "npm run build && electron .",
+    "dist:mac": "npm run build && electron-builder --mac --x64",
+    "dist:dmg": "npm run build && npx electron-builder --mac --x64 --dir && rm -rf /tmp/dmg-staging && mkdir -p /tmp/dmg-staging && cp -r \"dist/mac/JSONL Gazelle.app\" /tmp/dmg-staging/ && ln -s /Applications /tmp/dmg-staging/Applications && rm -f dist/JSONL-Gazelle-1.0.0-Intel.dmg && hdiutil create -volname \"JSONL Gazelle\" -srcfolder /tmp/dmg-staging -ov -format UDZO dist/JSONL-Gazelle-1.0.0-Intel.dmg",
+    "dist:win": "npm run build && electron-builder --win --x64",
+    "dist:all": "npm run build && npm run dist:dmg && electron-builder --win --x64",
+    "dist:linux": "npm run build && electron-builder --linux --x64"
+  },
+  "build": {
+    "appId": "com.lex.jsonlgazelle",
+    "productName": "JSONL Gazelle",
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "dir"
+      ],
+      "fileAssociations": [
+        {
+          "ext": "jsonl",
+          "name": "JSON Lines",
+          "role": "Editor",
+          "icon": "build/icon.icns"
+        },
+        {
+          "ext": "ndjson",
+          "name": "Newline Delimited JSON",
+          "role": "Editor",
+          "icon": "build/icon.icns"
+        },
+        {
+          "ext": "json",
+          "name": "JSON Document",
+          "role": "Viewer",
+          "icon": "build/icon.icns"
+        }
+      ],
+      "icon": "build/icon.icns"
+    },
+    "dmg": {
+      "title": " ",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable",
+        "zip"
+      ],
+      "icon": "build/icon.ico",
+      "fileAssociations": [
+        {
+          "ext": "jsonl",
+          "name": "JSON Lines",
+          "role": "Editor"
+        },
+        {
+          "ext": "ndjson",
+          "name": "Newline Delimited JSON",
+          "role": "Editor"
+        },
+        {
+          "ext": "json",
+          "name": "JSON Document",
+          "role": "Viewer"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "JSONL Gazelle"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "tar.gz"
+      ],
+      "category": "Development",
+      "icon": "build/icon.png",
+      "fileAssociations": [
+        {
+          "ext": "jsonl",
+          "name": "JSON Lines",
+          "mimeType": "application/x-jsonlines"
+        },
+        {
+          "ext": "ndjson",
+          "name": "Newline Delimited JSON",
+          "mimeType": "application/x-ndjson"
+        },
+        {
+          "ext": "json",
+          "name": "JSON Document",
+          "mimeType": "application/json"
+        }
+      ]
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.3.3"
+  }
+}

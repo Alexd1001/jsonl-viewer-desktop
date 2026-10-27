@@ -1,0 +1,3 @@
+{"event": "login", "user_id": 101, "ip": "192.168.1.1", "status": "success"}
+{"event": "upload", "user_id": 101, "ip": "192.168.1.1", "status": "success", "file": "doc1.pdf"}
+{"event": "logout", "user_id": 101, "ip": "192.168.1.1", "status": "success"}

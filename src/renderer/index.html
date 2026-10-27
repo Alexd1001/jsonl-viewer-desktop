@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; img-src 'self' file: data: blob:; worker-src 'self' blob: data:;">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JSONL Gazelle</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+      font-size: var(--vscode-font-size, 13px);
+      color: var(--vscode-foreground, #ccc);
+      background-color: var(--vscode-editor-background, #1e1e1e);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* macOS Window Drag Bar */
+    .titlebar {
+      height: 38px;
+      background: var(--vscode-editorWidget-background, #252526);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px; /* Adaptive titlebar */
+      border-bottom: 1px solid var(--vscode-panel-border, #2b2b2b);
+      -webkit-app-region: drag;
+      font-size: 12px;
+      color: var(--vscode-descriptionForeground, #8c8c8c);
+      font-weight: 500;
+    }
+
+    .sidebar-toggle-btn {
+      -webkit-app-region: no-drag;
+      background: transparent;
+      border: none;
+      color: var(--vscode-foreground, #ccc);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 4px;
+    }
+
+    .sidebar-toggle-btn:hover {
+      background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+    }
+
+    .drop-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 120, 212, 0.2);
+      border: 2px dashed var(--vscode-focusBorder, #0078d4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      pointer-events: none;
+      font-size: 16px;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .titlebar span {
+      pointer-events: none;
+    }
+
+    .app-container {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* BBEdit Sidebar */
+    .sidebar {
+      width: 240px;
+      min-width: 160px;
+      max-width: 500px;
+      background: var(--vscode-editorWidget-background, #252526);
+      border-right: 1px solid var(--vscode-panel-border, #2b2b2b);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 10px 12px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--vscode-descriptionForeground, #8c8c8c);
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .sidebar-scroll {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .sidebar-section-title {
+      padding: 6px 12px 4px 12px;
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--vscode-descriptionForeground, #777);
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      padding: 6px 12px;
+      cursor: pointer;
+      gap: 8px;
+      border-left: 2px solid transparent;
+      transition: background 0.1s ease;
+    }
+
+    .file-item:hover {
+      background: var(--vscode-list-hoverBackground, #2a2d2e);
+    }
+
+    .file-item.active {
+      background: var(--vscode-list-activeSelectionBackground, #04395e);
+      color: var(--vscode-list-activeSelectionForeground, #fff);
+      border-left-color: var(--vscode-focusBorder, #0078d4);
+    }
+
+    .file-item.dragging {
+      opacity: 0.4;
+    }
+
+    .file-item.drag-over {
+      border-bottom: 2px solid var(--vscode-focusBorder, #0078d4);
+    }
+
+    .file-icon {
+      display: flex;
+      align-items: center;
+      color: var(--vscode-icon-foreground, #c5c5c5);
+      flex-shrink: 0;
+    }
+
+    .file-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .file-name {
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-path {
+      font-size: 10px;
+      color: var(--vscode-descriptionForeground, #888);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      opacity: 0;
+      transition: opacity 0.1s ease;
+    }
+
+    .file-item:hover .file-actions,
+    .file-item.active .file-actions {
+      opacity: 1;
+    }
+
+    .file-actions button {
+      background: transparent;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      padding: 2px;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .file-actions button:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .file-actions button.pinned {
+      color: #e5a93b;
+    }
+
+    /* Resizer Bar */
+    .resizer {
+      width: 4px;
+      cursor: col-resize;
+      background: transparent;
+      transition: background 0.15s ease;
+    }
+
+    .resizer:hover {
+      background: var(--vscode-focusBorder, #0078d4);
+    }
+
+    /* Main Area */
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      background: var(--vscode-editor-background, #1e1e1e);
+    }
+
+    #gazelle-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* Empty state */
+    .empty-state {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: var(--vscode-descriptionForeground, #888);
+    }
+
+    .empty-btn {
+      background: var(--vscode-button-background, #0078d4);
+      color: var(--vscode-button-foreground, #fff);
+      border: none;
+      padding: 8px 16px;
+      border-radius: 3px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .empty-btn:hover {
+      background: var(--vscode-button-hoverBackground, #026ec1);
+    }
+
+    /* Context Menu */
+    .context-menu {
+      position: fixed;
+      display: none;
+      z-index: 10000;
+      background: var(--vscode-menu-background, #252526);
+      border: 1px solid var(--vscode-menu-border, #454545);
+      border-radius: 5px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+      padding: 4px 0;
+      min-width: 170px;
+    }
+
+    .context-menu-item {
+      padding: 6px 14px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--vscode-menu-foreground, #ccc);
+    }
+
+    .context-menu-item:hover {
+      background: var(--vscode-menu-selectionBackground, #04395e);
+      color: #fff;
+    }
+
+    .context-menu-separator {
+      height: 1px;
+      background: var(--vscode-menu-separatorBackground, #454545);
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body class="theme-dark">
+  <div class="titlebar">
+    <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" title="Toggle Sidebar (Cmd+B)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        <line x1="9" y1="3" x2="9" y2="21"></line>
+      </svg>
+    </button>
+    <span id="window-title">JSONL Gazelle</span>
+    <div style="width: 28px;"></div>
+  </div>
+
+  <div class="app-container" id="app-container">
+    <div class="drop-overlay" id="drop-overlay">Drop JSONL / NDJSON / JSON files to open</div>
+    <!-- BBEdit-style Sidebar -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <span>Files</span>
+      </div>
+      <div class="sidebar-scroll">
+        <div id="pinned-section" style="display: none;">
+          <div class="sidebar-section-title">Pinned</div>
+          <div id="sidebar-pinned"></div>
+          <div style="height: 1px; background: var(--vscode-panel-border, #2b2b2b); margin: 6px 10px;"></div>
+        </div>
+        <div class="sidebar-section-title">Open Documents</div>
+        <div id="sidebar-files"></div>
+      </div>
+    </div>
+
+    <div class="resizer" id="resizer"></div>
+
+    <div class="main-area">
+      <iframe id="gazelle-frame"></iframe>
+
+      <div class="empty-state" id="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="12" y1="18" x2="12" y2="12"></line>
+          <line x1="9" y1="15" x2="15" y2="15"></line>
+        </svg>
+        <div style="font-size: 15px; font-weight: 500;">JSONL Gazelle</div>
+        <div>Drag & drop .jsonl, .ndjson, or .json files here, or</div>
+        <button class="empty-btn" id="open-file-btn">Open File (Cmd+O)</button>
+        <div style="font-size: 11px; opacity: 0.7; margin-top: 10px;">Tip: Press <code>Esc</code> anytime to return to this Home screen. Press <code>Cmd+B</code> to toggle the sidebar.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar Context Menu -->
+  <div class="context-menu" id="context-menu">
+    <div class="context-menu-item" id="ctx-close">Close</div>
+    <div class="context-menu-item" id="ctx-close-others">Close Others</div>
+    <div class="context-menu-item" id="ctx-close-all">Close All</div>
+    <div class="context-menu-item" id="ctx-close-below">Close Below</div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" id="ctx-pin">Pin / Unpin</div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" id="ctx-reveal">Reveal in Finder</div>
+    <div class="context-menu-item" id="ctx-copy-path">Copy File Path</div>
+  </div>
+
+  <script src="./bundle.js"></script>
+</body>
+</html>
